@@ -1,71 +1,137 @@
-import React, { useState, Fragment, useRef } from 'react';
-import { render } from 'react-dom';
+import React, { useState, useRef, useEffect } from "react";
+import { render } from "react-dom";
 
-import DialogTitle from '@material-ui/core/DialogTitle';
-import Dialog from '@material-ui/core/Dialog';
-import DialogContent from '@material-ui/core/DialogContent';
-import TextField from '@material-ui/core/TextField';
-import Button from '@material-ui/core/Button';
+import DialogTitle from "@material-ui/core/DialogTitle";
+import Dialog from "@material-ui/core/Dialog";
+import DialogContent from "@material-ui/core/DialogContent";
+import TextField from "@material-ui/core/TextField";
+import Button from "@material-ui/core/Button";
 
 export default function App() {
-    const canvas = useRef();
-    const [actualCircle, setActualCircle] = useState({});
-    const [circles, setCircles] = useState([]);
-    const [isCommenting, setIsCommenting] = useState(false);
-    const [textInput, setTextInput] = useState("Comentário sobre as plantas.");
+	const canvas = useRef();
+	const [actualCircle, setActualCircle] = useState({});
+	const [circles, setCircles] = useState([]);
+	const [isCommenting, setIsCommenting] = useState(false);
+	const [textInput, setTextInput] = useState("");
+	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
-    const setPoint = ({ clientX, clientY }) => {
-        const ctx = canvas.current.getContext("2d");
-        const [x, y] = [clientX, clientY];
-        if (circles.some(circle => isIntersection({ x, y }, circle))) return;
+	const handleCanvasClick = ({ clientX, clientY }) => {
+		const ctx = canvas.current.getContext("2d");
+		const [x, y] = [clientX, clientY];
+		const foundIndex = circles.findIndex(circle =>
+			isIntersection({ x, y }, circle, 1)
+		);
 
-        ctx.beginPath();
-        ctx.arc(x, y, 30, 0, 2 * Math.PI);
-        ctx.fillStyle = "green";
-        ctx.fill();
-        setActualCircle({ x, y, radius: 30, color: "green", comment: "" });
-        setIsCommenting(true);
-    }
+		if (foundIndex >= 0) {
+			setTextInput(circles[foundIndex].comment);
+			setActualCircle({ ...circles[foundIndex], index: foundIndex });
+			return setIsCommenting(true);
+		}
 
-    const isIntersection = (point, circle) => {
-        return Math.sqrt((point.x - circle.x) ** 2 + (point.y - circle.y) ** 2) < (circle.radius * 2);
-    }
+		if (circles.some(circle => isIntersection({ x, y }, circle))) return;
 
-    const handleClose = () => {
-        setCircles([...circles, { ...actualCircle, comment: textInput }]);
-        setIsCommenting(false);
-    }
+		ctx.beginPath();
+		ctx.arc(x, y, 30, 0, 2 * Math.PI);
+		ctx.fillStyle = getRandomColor();
+		ctx.fill();
+		setActualCircle({ x, y, radius: 30, color: ctx.fillStyle, comment: "" });
+		setIsCommenting(true);
+	};
 
-    const handleChange = ({ target }) => {
-        setTextInput(target.value);
-    }
+	const isIntersection = (point, circle, range = 2.2) =>
+		Math.sqrt((point.x - circle.x) ** 2 + (point.y - circle.y) ** 2) <
+		circle.radius * range;
 
-    return (
-        <Fragment>
-            <canvas id="myCanvas" ref={canvas} className="canvas-bg" width="1200" height="800" onClick={setPoint}></canvas>
+	const handleClose = () => {
+		let aux = [...circles];
+		if (actualCircle.hasOwnProperty("index")) {
+			aux.splice(actualCircle.index, 1, {
+				...actualCircle,
+				comment: textInput
+			});
+			Reflect.deleteProperty(aux, "index");
+		} else {
+			aux = [...circles, { ...actualCircle, comment: textInput }];
+		}
+		setCircles(aux);
+		setIsCommenting(false);
+		setTextInput("");
+	};
 
-            <Dialog aria-labelledby="simple-dialog-title" open={isCommenting}>
-                <DialogTitle>Comentário</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        label=""
-                        multiline
-                        rowsMax="4"
-                        value={textInput}
-                        onChange={handleChange}
-                        margin="normal"
-                    />
+	const handleChange = ({ target }) => setTextInput(target.value);
 
-                    <br />
+	const getRandomColor = () => {
+		let letters = "0123456789ABCDEF";
+		let color = "#";
+		for (let i = 0; i < 6; i++) {
+			color += letters[Math.floor(Math.random() * 16)];
+		}
+		return color;
+	};
 
-                    <Button variant="contained" onClick={handleClose}>
-                        Salvar
-                    </Button>
-                </DialogContent>
-            </Dialog>
-        </Fragment>
+	const handleMouseMove = ({ x, y }) => setMousePosition({ x, y });
 
-    );
+	useEffect(() => {
+		canvas.current.addEventListener("mousemove", handleMouseMove);
+
+		return () => {
+			canvas.current.removeEventListener("mousemove", handleMouseMove);
+		};
+	}, []);
+
+	return (
+		<div>
+			<canvas
+				id="myCanvas"
+				ref={canvas}
+				className="canvas-bg"
+				onClick={handleCanvasClick}
+				width="1200"
+				height="800"
+				style={{
+					cursor:
+						circles.some(circle => isIntersection(mousePosition, circle, 1)) &&
+						"pointer"
+				}}
+			></canvas>
+
+			<Dialog
+				aria-labelledby="simple-dialog-title"
+				open={isCommenting}
+				fullWidth
+				maxWidth="sm"
+			>
+				<DialogTitle>
+					{!actualCircle.hasOwnProperty("index")
+						? "Adicionar comentário"
+						: "Editar comentário"}
+				</DialogTitle>
+
+				<DialogContent>
+					<TextField
+						id="outlined-multiline-static"
+						label="Descrição do comentário"
+						multiline
+						rows="4"
+						margin="normal"
+						variant="outlined"
+						value={textInput}
+						onChange={handleChange}
+						fullWidth
+					/>
+				</DialogContent>
+
+				<Button
+					variant="contained"
+					onClick={handleClose}
+					disabled={!textInput}
+					color="primary"
+				>
+					Salvar
+				</Button>
+			</Dialog>
+		</div>
+	);
 }
 
 render(<App />, document.getElementById("root"));
